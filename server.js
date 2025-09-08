@@ -9,8 +9,15 @@ const app = express();
 // Connexion à la base de données
 connectDB();
 
-// Middlewares
-app.use(cors());
+// Domaine de ton frontend (exemple : https://mon-frontend.com)
+const FRONTEND_URL = "https://cspam.onrender.com";
+
+app.use(cors({
+  origin: FRONTEND_URL,    // ✅ seul ce domaine est accepté
+  methods: ["GET", "POST", "PUT", "DELETE"], // méthodes autorisées
+  credentials: true        // si tu utilises cookies/token
+}));
+
 app.use(express.json());
 //app.use(morgan('dev'));
 
