@@ -63,13 +63,90 @@ router.post("/", protect, async (req, res) => {
   }
 });
 
-// Lister toutes les transactions  (avec infos élève si entrée)
+/* =========================
+   LISTER LES TRANSACTIONS
+========================= */
 router.get("/", protect, async (req, res) => {
   try {
-    const transactions = await Transaction.find().sort({ createdAt: -1 }).populate("eleve", "nom prenom classe");
+    const { type, eleve, from, to } = req.query;
+    const filter = {};
+
+    if (type) filter.type = type;
+    if (eleve) filter.eleve = eleve;
+    if (from || to) {
+      filter.date = {};
+      if (from) filter.date.$gte = new Date(from);
+      if (to) filter.date.$lte = new Date(to);
+    }
+
+    const transactions = await Transaction.find(filter)
+      .sort({ date: -1 })
+      .lean();
+
     res.json(transactions);
   } catch (err) {
-    console.error(err);
+    console.error("Erreur liste transactions:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+/* =========================
+   RECUPERER UNE TRANSACTION
+========================= */
+router.get("/:id", protect, async (req, res) => {
+  try {
+    const trx = await Transaction.findById(req.params.id);
+    if (!trx) return res.status(404).json({ error: "Transaction introuvable" });
+    res.json(trx);
+  } catch (err) {
+    console.error("Erreur get transaction:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+/* =========================
+   METTRE A JOUR UNE TRANSACTION
+========================= */
+router.put("/:id", protect, async (req, res) => {
+  try {
+    const data = req.body;
+
+    // Si c'est une entrée, vérifier reçu
+    if (data.type === "entree" && data.recu) {
+      const recuExistant = await Transaction.findOne({
+        recu: data.recu,
+        type: "entree",
+        _id: { $ne: req.params.id },
+      });
+      if (recuExistant) {
+        return res.status(400).json({ error: `Le reçu ${data.recu} existe déjà.` });
+      }
+    }
+
+    const updated = await Transaction.findByIdAndUpdate(req.params.id, data, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!updated) return res.status(404).json({ error: "Transaction introuvable" });
+    res.json({ message: "Transaction mise à jour", data: updated });
+  } catch (err) {
+    console.error("Erreur update transaction:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+/* =========================
+   SUPPRIMER UNE TRANSACTION
+========================= */
+router.delete("/:id", protect, async (req, res) => {
+  try {
+    const deleted = await Transaction.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: "Transaction introuvable" });
+
+    res.json({ message: "Transaction supprimée" });
+  } catch (err) {
+    console.error("Erreur delete transaction:", err);
     res.status(500).json({ error: "Erreur serveur" });
   }
 });
