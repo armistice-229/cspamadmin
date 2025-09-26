@@ -153,14 +153,6 @@ doc.fillColor('black');
         fit: [100, 100]
       });
 
-      //Mention du site pour signature numérique (footer, centré): Pied de page
-      doc.font("Helvetica-Oblique")
-        .fontSize(6)
-        .fillColor("black")
-        .text("scoly.onrender.com", contentX, 780, {
-          width: contentW,
-          align: "center"
-        });
       //Fin du document
       doc.end();
 

@@ -51,68 +51,65 @@ router.get("/progress", async (req, res) => {
  
 router.get("/stats", async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // début de la journée
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
+    const todayStr = new Date().toISOString().split("T")[0]; // ex: "2025-09-06"
 
-    // 1️⃣ Solde total (toutes transactions)
-    const soldeAgg = await Transaction.aggregate([
+    // 1️⃣ Revenus du jour (entrées uniquement aujourd’hui)
+    const revenusAgg = await Transaction.aggregate([
       {
-        $group: {
-          _id: "$type",
-          total: { $sum: "$montant" }
+        $match: {
+          type: "entree",
+          $expr: {
+            $eq: [
+              { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+              todayStr
+            ]
+          }
         }
-      }
+      },
+      { $group: { _id: null, total: { $sum: "$montant" } } }
     ]);
+    const revenusJour = revenusAgg[0]?.total || 0;
 
-    let totalEntrees = 0, totalSorties = 0;
-    soldeAgg.forEach(s => {
-      if (s._id === "entree") totalEntrees = s.total;
-      if (s._id === "sortie") totalSorties = s.total;
-    });
+    // 2️⃣ Dépenses du jour (sorties uniquement aujourd’hui)
+    const depensesAgg = await Transaction.aggregate([
+      {
+        $match: {
+          type: "sortie",
+          $expr: {
+            $eq: [
+              { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+              todayStr
+            ]
+          }
+        }
+      },
+      { $group: { _id: null, total: { $sum: "$montant" } } }
+    ]);
+    const depensesJour = depensesAgg[0]?.total || 0;
 
-    const solde = totalEntrees - totalSorties;
+    // 3️⃣ Solde total (visible uniquement si rôle autorisé)
+    let solde = null;
+    if (["admin", "directeur"].includes(req.user.role)) {
+      const soldeAgg = await Transaction.aggregate([
+        {
+          $group: {
+            _id: "$type",
+            total: { $sum: "$montant" }
+          }
+        }
+      ]);
 
-  const todayStr = new Date().toISOString().split("T")[0]; // "2025-09-06"
+      const totalEntrees =
+        soldeAgg.find(s => s._id === "entree")?.total || 0;
+      const totalSorties =
+        soldeAgg.find(s => s._id === "sortie")?.total || 0;
 
-// 2️⃣ Revenus du jour (entrées uniquement aujourd’hui)
-const revenusAgg = await Transaction.aggregate([
-  {
-    $match: {
-      type: "entree",
-      $expr: {
-        $eq: [
-          { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
-          todayStr
-        ]
-      }
+      solde = totalEntrees - totalSorties;
     }
-  },
-  { $group: { _id: null, total: { $sum: "$montant" } } }
-]);
-const revenusJour = revenusAgg.length > 0 ? revenusAgg[0].total : 0;
 
-// 3️⃣ Dépenses du jour (sorties uniquement aujourd’hui)
-const depensesAgg = await Transaction.aggregate([
-  {
-    $match: {
-      type: "sortie",
-      $expr: {
-        $eq: [
-          { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
-          todayStr
-        ]
-      }
-    }
-  },
-  { $group: { _id: null, total: { $sum: "$montant" } } }
-]);
-const depensesJour = depensesAgg.length > 0 ? depensesAgg[0].total : 0;
-
-    
+    // 4️⃣ Réponse JSON
     res.json({
-      solde,
+      solde,        // null si l’utilisateur n’a pas le droit
       revenusJour,
       depensesJour
     });
@@ -175,8 +172,6 @@ router.get("/stats-caisse", async (req, res) => {
     res.status(500).json({ message: "Erreur serveur" });
   }
 });
-
-
 
 // Effectifs par classe (année scolaire en cours)
 router.get("/effectifs", async (req, res) => {

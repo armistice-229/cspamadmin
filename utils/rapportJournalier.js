@@ -29,15 +29,12 @@ function generateRapportPDF(res, data) {
 
   doc.moveDown(1);
   doc.fontSize(10).font("Helvetica")
-    .text(`Chargé de caisse : ${data.caissier}`, 25, doc.y, { continued: true })
-    .text(`Solde d’ouverture : ${data.soldeOuverture.toLocaleString("fr-FR").replace(/\u202F/g, " ")} FCFA`, { align: "right" });
+    .text(`Chargé de caisse : ${data.caissier}`, 25, doc.y);
 
-  doc.moveDown(1);
- // Fonction utilitaire pour dessiner un tableau multi-page
+  // ===== utilitaire pour tableau =====
   const drawTable = (headers, rows, startX, startY, colWidths, totalText = null) => {
     let y = startY;
     const rowPadding = 5;
-    // === Fonction pour tableau stylisé avec ajustement dynamique ===
     const drawHeader = () => {
       let x = startX;
       const rowHeight = 22;
@@ -52,40 +49,30 @@ function generateRapportPDF(res, data) {
 
     drawHeader();
 
-    // Lignes
     doc.font("Helvetica").fontSize(9).fillColor("black");
     rows.forEach((r, rowIndex) => {
-      // Calcul hauteur nécessaire
       let heights = r.map((cell, i) =>
         doc.heightOfString(cell, { width: colWidths[i] - 6 })
       );
       let rowHeight = Math.max(...heights) + rowPadding * 2;
 
-      // Vérifier si la ligne dépasse la page
       if (y + rowHeight > doc.page.height - doc.page.margins.bottom - 50) {
         doc.addPage();
         y = doc.y;
         drawHeader();
       }
 
-      // Dessiner la ligne
       let x = startX;
       const bgColor = rowIndex % 2 === 0 ? "white" : "#f9f9f9";
       r.forEach((cell, i) => {
         doc.rect(x, y, colWidths[i], rowHeight).fillAndStroke(bgColor, "black");
-          // ✅ Si c'est la première colonne (Montant), on met en gras
-          if (i === 0) {
-            doc.font("Helvetica-Bold");
-          } else {
-            doc.font("Helvetica");
-          }
+        if (i === 0) doc.font("Helvetica-Bold"); else doc.font("Helvetica");
         doc.fillColor("black").text(cell, x + 3, y + rowPadding, { width: colWidths[i] - 6 });
         x += colWidths[i];
       });
       y += rowHeight;
     });
 
-    // Total en bas du tableau
     if (totalText) {
       if (y + 30 > doc.page.height - doc.page.margins.bottom - 50) {
         doc.addPage();
@@ -96,8 +83,7 @@ function generateRapportPDF(res, data) {
     }
 
     return y;
-  }
-
+  };
 
   // === ENTRÉES ===
   doc.moveDown(1);
@@ -143,34 +129,26 @@ function generateRapportPDF(res, data) {
     `Total : ${totalSorties.toLocaleString("fr-FR").replace(/\u202F/g, " ")} FCFA`
   );
 
-  // === RÉSUMÉ FINAL ===
-  const soldeNet = totalEntrees - totalSorties;
-  const soldeCloture = data.soldeOuverture + soldeNet;
-
+  // === NOUVEAU RÉSUMÉ SIMPLIFIÉ : solde du jour ===
+  const soldeJour = totalEntrees - totalSorties;
   doc.moveDown(1.5);
-  doc.font("Helvetica-Bold").fillColor("black").text("Résumé final", 25, doc.y, { underline: true });
+  doc.font("Helvetica-Bold").fillColor("black").text("Solde du jour", 25, doc.y, { underline: true });
   doc.moveDown(0.5);
-
-  const resumeHeaders = ["Solde d’ouverture", "Solde net de la journée", "Solde de clôture"];
-  const resumeRows = [[
-    `${data.soldeOuverture.toLocaleString("fr-FR").replace(/\u202F/g, " ")} FCFA`,
-    `${(soldeNet >= 0 ? "+" : "")}${soldeNet.toLocaleString("fr-FR").replace(/\u202F/g, " ")} FCFA`,
-    `${soldeCloture.toLocaleString("fr-FR").replace(/\u202F/g, " ")} FCFA`
-  ]];
-
-  drawTable(resumeHeaders, resumeRows, 50, doc.y, [150, 150, 150]);
+  doc.font("Helvetica-Bold").fontSize(12)
+    .text(`${soldeJour.toLocaleString("fr-FR").replace(/\u202F/g, " ")} FCFA`, { align: "left" });
 
   // === TEXTE DE CERTIFICATION ===
   doc.moveDown(1.5);
-  doc.font("Helvetica-Oblique").fontSize(10).fillColor("black").text("Certifié exact, sincère et conforme aux mouvements de caisse enregistrés en ce jour, pour servir et valoir ce que de droit", 30, doc.y, { align: "left" });
+  doc.font("Helvetica-Oblique").fontSize(10)
+    .fillColor("black")
+    .text("Certifié exact, sincère et conforme aux mouvements de caisse enregistrés en ce jour, pour servir et valoir ce que de droit", 30, doc.y, { align: "left" });
 
   doc.moveDown(1);
   doc.font("Helvetica").fontSize(10).text(`Fait à Comé, le ${data.date}`, { align: "right" });
 
-  // === SIGNATURES ===
   doc.moveDown(2);
   doc.font("Helvetica").fontSize(10);
-  doc.text("Le Fondé", 80).text("Le Secrétaire Comptable", 400);
+  doc.text("Le Fondé", 80).text("Le Secrétaire", 400);
 
   doc.moveDown(4);
   doc.font("Helvetica-Bold").text(data.fonde, 80).text(data.caissier, 400);

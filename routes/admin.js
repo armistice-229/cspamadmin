@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const Eleve = require("../models/Eleve");
+const User = require("../models/User");
+const AgentCaisse = require("../models/AgentCaisse");
 const FraisScolarite = require("../models/FraisScolarite");
 const protect = require("../middleware/authMiddleware");
 
@@ -101,5 +103,195 @@ router.post("/users/register", async (req, res) => {
     res.status(500).json({ error: "Erreur serveur." });
   }
 });
+
+
+// ➕ Ajouter un agent de caisse
+router.post("/agent/", protect, async (req, res) => {
+  try {
+    const { nom, prenom, fonction } = req.body;
+
+    if (!nom || !prenom) {
+      return res.status(400).json({ error: "Nom et prénom requis." });
+    }
+
+    const agent = await AgentCaisse.create({
+      user: req.user._id, // 🔑 rattacher à l'école connectée
+      nom,
+      prenom,
+      fonction,
+    });
+
+    res.status(201).json(agent);
+  } catch (err) {
+    console.error("Erreur ajout agent:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// 📋 Lister tous les agents d'une école
+router.get("/agent/", protect, async (req, res) => {
+  try {
+    const agents = await AgentCaisse.find({ user: req.user._id }).sort({ actif: -1, nom: 1 });
+    res.json(agents);
+  } catch (err) {
+    console.error("Erreur liste agents:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// ✏️ Modifier un agent (nom, prénom, fonction, statut actif)
+router.put("/agent/:id", protect, async (req, res) => {
+  try {
+    const { nom, prenom, fonction, actif } = req.body;
+
+    const agent = await AgentCaisse.findOneAndUpdate(
+      { _id: req.params.id, user: req.user._id }, // sécurité : seulement ses agents
+      { nom, prenom, fonction, actif },
+      { new: true }
+    );
+
+    if (!agent) {
+      return res.status(404).json({ error: "Agent non trouvé." });
+    }
+
+    res.json(agent);
+  } catch (err) {
+    console.error("Erreur update agent:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// ❌ Supprimer un agent
+router.delete("/agent/:id", protect, async (req, res) => {
+  try {
+    const agent = await AgentCaisse.findOneAndDelete({ _id: req.params.id, user: req.user._id });
+
+    if (!agent) {
+      return res.status(404).json({ error: "Agent non trouvé." });
+    }
+
+    res.json({ message: "Agent supprimé avec succès." });
+  } catch (err) {
+    console.error("Erreur suppression agent:", err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// @desc    Ajouter un élève
+// @route   POST /api/eleves
+// @access  Private
+router.post("/eleve", protect, async (req, res) => {
+  try {
+    const {
+      nom,
+      prenom,
+      dateNaissance,
+      lieuNaissance,
+      sexe,
+      contact,
+      matricule,
+      classe,
+      anneeScolaire,
+    } = req.body;
+
+    // Vérification de champs obligatoires
+    if (!nom || !prenom || !sexe || !classe || !anneeScolaire) {
+      return res.status(400).json({ message: "Champs obligatoires manquants." });
+    }
+
+    // Vérifier si le matricule existe déjà
+    if (matricule) {
+      const existe = await Eleve.findOne({ matricule });
+      if (existe) {
+        return res.status(400).json({ message: "Matricule déjà utilisé." });
+      }
+    }
+
+    const nouvelEleve = new Eleve({
+      nom,
+      prenom,
+      dateNaissance,
+      lieuNaissance,
+      sexe,
+      contact,
+      matricule,
+      classe,
+      anneeScolaire,
+    });
+
+    await nouvelEleve.save();
+
+    res.status(201).json({
+      message: "Élève enregistré avec succès.",
+      data: nouvelEleve,
+    });
+  } catch (error) {
+    console.error("Erreur enregistrement élève:", error);
+    res.status(500).json({ message: "Erreur serveur." });
+  }
+});
+
+
+/* =========================
+   GET LISTE D'ÉLÈVES PAR CLASSE
+========================= */
+router.get("/eleve", protect, async (req, res) => {
+  try {
+    const classe = req.query.classe;
+    if (!classe) {
+      return res.status(400).json({ message: "La classe est requise" });
+    }
+
+    const eleves = await Eleve.find({ classe }).sort({ nom: 1, prenom: 1 });
+    res.json(eleves); // renvoie un array JSON
+  } catch (err) {
+    console.error("Erreur liste élèves:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+/* =========================
+   MISE À JOUR D'UN ÉLÈVE
+========================= */
+router.put("/eleve/:id", protect, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const data = req.body;
+
+    // Validation côté backend si besoin
+    if (data.contact && !/^[+\d][\d\s\-()]{6,20}$/.test(data.contact)) {
+      return res.status(400).json({ message: "Numéro de contact invalide" });
+    }
+
+    const updated = await Eleve.findByIdAndUpdate(id, data, { new: true, runValidators: true });
+    if (!updated) return res.status(404).json({ message: "Élève non trouvé" });
+
+    res.json({ message: "Élève mis à jour", data: updated });
+  } catch (err) {
+    console.error("Erreur update élève:", err);
+    // Gestion des erreurs Mongoose
+    if (err.name === "ValidationError") {
+      return res.status(400).json({ message: err.message, errors: err.errors });
+    }
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+/* =========================
+   SUPPRESSION D'UN ÉLÈVE
+========================= */
+router.delete("/eleve/:id", protect, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const deleted = await Eleve.findByIdAndDelete(id);
+    if (!deleted) return res.status(404).json({ message: "Élève non trouvé" });
+
+    res.json({ message: "Élève supprimé" });
+  } catch (err) {
+    console.error("Erreur suppression élève:", err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
 
 module.exports = router;

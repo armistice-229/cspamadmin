@@ -1,18 +1,28 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-//const morgan = require('morgan');
+const morgan = require('morgan');
 const connectDB = require('./config/db');
 
 const app = express();
 
 // Connexion à la base de données
 connectDB();
+/*
+// Domaine de ton frontend (exemple : https://mon-frontend.com)
+const FRONTEND_URL = "https://cspam.onrender.com";
+
+app.use(cors({
+  origin: FRONTEND_URL,    // ✅ seul ce domaine est accepté
+  methods: ["GET", "POST", "PUT", "DELETE"], // méthodes autorisées
+  credentials: true        // si tu utilises cookies/token
+}));
+*/
 
 // Middlewares
 app.use(cors());
 app.use(express.json());
-//app.use(morgan('dev'));
+app.use(morgan('dev'));
 
 // Routes API
 const AdminRoutes = require('./routes/admin');
