@@ -3,6 +3,8 @@ const Transaction = require("../models/OperationCaisse");
 const generateRapportPDF = require("../utils/rapportJournalier"); // import utilitaire
 const router = express.Router();
 const protect = require("../middleware/authMiddleware");
+const Eleve = require("../models/Eleve");
+const genererListePDF = require("../utils/elevesListePDF");
 
 // Toutes les routes protégées
 router.use(protect);
@@ -73,6 +75,33 @@ router.get("/journalier", async (req, res) => {
     res.status(500).json({ error: "Erreur lors de la génération du PDF" });
   }
 });
+
+
+
+// Liste ALPHABETIQUE des élèves d'une classe
+// // GET /api/eleves/liste/:classe?annee=2025-2026
+router.get("/liste/:classe", protect, async (req, res) => {
+  try {
+    const { classe } = req.params;
+    const anneeScolaire = req.query.annee || "2024-2025";
+
+    const eleves = await Eleve.find({ classe, anneeScolaire })
+      .collation({ locale: "fr", strength: 2 })
+      .sort({ nom: 1, prenom: 1 })
+      .lean();
+
+    if (!eleves.length) {
+      return res.status(404).json({ message: "Aucun élève trouvé pour cette classe." });
+    }
+
+    // Génération PDF
+    genererListePDF(res, eleves, classe, anneeScolaire);
+  } catch (error) {
+    console.error("Erreur génération liste PDF:", error);
+    res.status(500).json({ message: "Erreur serveur lors de la génération du PDF." });
+  }
+});
+
 
 
 module.exports = router;
