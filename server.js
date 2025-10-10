@@ -44,6 +44,8 @@ app.use("/api/dashboard", dashboardRoutes);
 const rapportRoutes = require("./routes/rapport");
 app.use("/api/rapport", rapportRoutes);
 
+const compteRoutes = require("./routes/compte");
+app.use("/api/compte", compteRoutes);
 
 // Démarrage du serveur
 const PORT = process.env.PORT || 5000;
