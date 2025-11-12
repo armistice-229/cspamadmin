@@ -128,19 +128,15 @@ doc.fillColor('black');
         });
 
       // "Le Directeur/Directrice"
-      doc.text(`La Directrice et PO,`, 0, finalY - 10, {
+      doc.text(`La Directrice`, 0, finalY - 10, {
         align: "right",
         width: doc.page.width - 100,
         continued: true
       })
-      .moveDown(1)
-        .text("La Secrétaire", {  align: "right",
-        width: doc.page.width - 100,
-        });
 
       // Nom du Directeur souligné
       doc.font("Helvetica-Bold")
-        .text("Remye - Persidas A. ANAGONOU", 0, finalY + 50, {
+        .text("DANSOU Mawoussé Esther", 0, finalY + 50, {
           align: "right",
           width: doc.page.width - 100,
           underline: true
