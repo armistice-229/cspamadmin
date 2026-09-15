@@ -61,25 +61,65 @@ doc.fillColor('black');
       doc.font('Helvetica').fontSize(12).fillColor('black');
 
       // ✅ TEXTE PRINCIPAL : démarre à x=60, y=doc.y (juste sous la zone 3),
-    // avec largeur fixe et interligne (lineGap)
-    doc.text("             Je soussignée ", 60, doc.y, { align: "left", lineGap: 7, continued: true })
-      .font("Helvetica-BoldOblique").text('DANSOU Mawoussé Esther', { continued: true })
-      .font("Helvetica").text(`, Directrice de l’école primaire privée`, { continued: true })
-      .font("Helvetica-BoldOblique").text('Arche du Millénium de Comé', { continued: true })
-      .font("Helvetica").text(", certifie que l’élève ", { continued: true })
-      .font("Helvetica-BoldOblique").text(data.nom, { continued: true })
-      .font("Helvetica").text(", né(e) le ", { continued: true })
-      .font("Helvetica-BoldOblique").text(data.dateNaissance, { continued: true })
-      .font("Helvetica").text(" à ", { continued: true })
-      .font("Helvetica-BoldOblique").text(data.lieuNaissance, { continued: true })
-      .font("Helvetica").text(" est régulièrement inscrit(e) dans mon établissement sous le numéro matricule ", { continued: true })
-      .font("Helvetica-BoldOblique").text(data.matricule, { continued: true })
-      .font("Helvetica").text(" depuis le ", { continued: true })
-      .font("Helvetica-BoldOblique").text(data.dateFirstInscription, { continued: true })
-      .font("Helvetica").text("  et poursuit actuellement ses études en classe de ", { continued: true })
-      .font("Helvetica-BoldOblique").text(data.classe, { continued: true })
-      .font("Helvetica").text(", avec les appréciations suivantes :");
-      doc.moveDown(2);
+// avec largeur fixe et interligne (lineGap)
+doc.text(
+  "             La Direction de l’école primaire privée ",
+  60,
+  doc.y,
+  {
+    align: "left",
+    lineGap: 7,
+    continued: true
+  }
+)
+  .font("Helvetica-BoldOblique")
+  .text("Arche du Millénium de Comé", { continued: true })
+
+  .font("Helvetica")
+  .text(" certifie que l’élève ", { continued: true })
+
+  .font("Helvetica-BoldOblique")
+  .text(data.nom, { continued: true })
+
+  .font("Helvetica")
+  .text(", né(e) le ", { continued: true })
+
+  .font("Helvetica-BoldOblique")
+  .text(data.dateNaissance, { continued: true })
+
+  .font("Helvetica")
+  .text(" à ", { continued: true })
+
+  .font("Helvetica-BoldOblique")
+  .text(data.lieuNaissance, { continued: true })
+
+  .font("Helvetica")
+  .text(
+    " est régulièrement inscrit(e) dans son établissement sous le numéro matricule ",
+    { continued: true }
+  )
+
+  .font("Helvetica-BoldOblique")
+  .text(data.matricule, { continued: true })
+
+  .font("Helvetica")
+  .text(" depuis le ", { continued: true })
+
+  .font("Helvetica-BoldOblique")
+  .text(data.dateFirstInscription, { continued: true })
+
+  .font("Helvetica")
+  .text(" et poursuit actuellement ses études en classe de ", {
+    continued: true
+  })
+
+  .font("Helvetica-BoldOblique")
+  .text(data.classe, { continued: true })
+
+  .font("Helvetica")
+  .text(", avec les appréciations suivantes :");
+
+doc.moveDown(2);
 
       // Appréciations
       doc.font("Helvetica-Bold").text("                           Assiduité : ", { underline: false, continued: true , lineGap: 8});
@@ -128,12 +168,12 @@ doc.fillColor('black');
         });
 
       // "Le Directeur/Directrice"
-      doc.text(`La Directrice et PO,\nLa Secretaire`, 0, finalY - 10, {
+      doc.text(`Le Directeur et PO,\nLa Secretaire`, 0, finalY - 10, {
         align: "right",
         width: doc.page.width - 100
       });
 
-      // Nom du Directeur souligné
+      // Nom  souligné
       doc.font("Helvetica-Bold")
         .text("Remye-Persidas A. ANAGONOU", 0, finalY + 50, {
           align: "right",
