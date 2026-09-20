@@ -83,6 +83,57 @@ router.get("/frais/", async (req, res) => {
   }
 });
 
+// ➡️ Dupliquer les frais de scolarité d'une année vers une autre (ex: la
+// grille tarifaire ne change pas ou change peu d'une rentrée à l'autre).
+// Les classes qui ont déjà un frais défini pour l'année cible sont ignorées
+// (pas d'écrasement silencieux d'une valeur déjà saisie).
+router.post("/frais/dupliquer", async (req, res) => {
+  try {
+    const { anneeSource, anneeCible } = req.body;
+    if (!anneeSource || !anneeCible) {
+      return res.status(400).json({ error: "anneeSource et anneeCible sont requis." });
+    }
+    if (anneeSource === anneeCible) {
+      return res.status(400).json({ error: "L'année cible doit être différente de l'année source." });
+    }
+
+    const fraisSource = await FraisScolarite.find({ anneeScolaire: anneeSource });
+    if (!fraisSource.length) {
+      return res.status(404).json({ error: `Aucun frais trouvé pour l'année ${anneeSource}.` });
+    }
+
+    const fraisExistantsCible = await FraisScolarite.find({ anneeScolaire: anneeCible }).select("classe");
+    const classesDejaDefinies = new Set(fraisExistantsCible.map((f) => f.classe));
+
+    const aCreer = fraisSource.filter((f) => !classesDejaDefinies.has(f.classe));
+
+    if (!aCreer.length) {
+      return res.json({
+        message: `Toutes les classes ont déjà un frais défini pour ${anneeCible}.`,
+        crees: 0,
+        ignorees: fraisSource.length,
+      });
+    }
+
+    const docs = aCreer.map((f) => ({
+      classe: f.classe,
+      montant: f.montant,
+      anneeScolaire: anneeCible,
+    }));
+    const inserted = await FraisScolarite.insertMany(docs);
+
+    res.status(201).json({
+      message: `${inserted.length} classe(s) dupliquée(s) de ${anneeSource} vers ${anneeCible}.`,
+      crees: inserted.length,
+      ignorees: classesDejaDefinies.size,
+      data: inserted,
+    });
+  } catch (err) {
+    console.error("Erreur duplication frais:", err);
+    res.status(500).json({ error: "Erreur serveur lors de la duplication." });
+  }
+});
+
 // ✅ Inscription (création d’un utilisateur)
 router.post("/users/register", async (req, res) => {
   try {
