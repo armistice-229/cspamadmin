@@ -298,5 +298,177 @@ router.delete("/eleve/:id", protect, async (req, res) => {
   }
 });
 
+/* =========================
+   TRANSFERT D'UN ÉLÈVE VERS UNE NOUVELLE ANNÉE SCOLAIRE
+   Crée une NOUVELLE fiche élève (nouvelle classe, nouvelle année) en copiant
+   les infos personnelles de l'ancienne fiche, et relie les deux via
+   eleveAnneePrecedente. L'ancienne fiche n'est jamais modifiée ni supprimée :
+   son historique (classe, paiements, certificats) reste intact.
+========================= */
+router.post("/eleve/:id/transferer", protect, async (req, res) => {
+  try {
+    const ancienId = req.params.id;
+    const { nouvelleClasse, nouvelleAnneeScolaire } = req.body;
+
+    if (!nouvelleClasse) {
+      return res.status(400).json({ message: "La nouvelle classe est requise." });
+    }
+
+    const ancienEleve = await Eleve.findById(ancienId);
+    if (!ancienEleve) {
+      return res.status(404).json({ message: "Élève introuvable." });
+    }
+
+    const anneeCible = nouvelleAnneeScolaire || (await getAnneeActive());
+
+    if (anneeCible === ancienEleve.anneeScolaire) {
+      return res.status(400).json({
+        message: "La nouvelle année doit être différente de l'année actuelle de l'élève.",
+      });
+    }
+
+    // Empêche un double transfert accidentel (double-clic, etc.)
+    const dejaTransfere = await Eleve.findOne({
+      eleveAnneePrecedente: ancienEleve._id,
+      anneeScolaire: anneeCible,
+    });
+    if (dejaTransfere) {
+      return res.status(409).json({
+        message: `Cet élève a déjà une fiche pour l'année ${anneeCible}.`,
+        data: dejaTransfere,
+      });
+    }
+
+    const nouvelleFiche = await Eleve.create({
+      nom: ancienEleve.nom,
+      prenom: ancienEleve.prenom,
+      dateNaissance: ancienEleve.dateNaissance,
+      lieuNaissance: ancienEleve.lieuNaissance,
+      sexe: ancienEleve.sexe,
+      contact: ancienEleve.contact,
+      matricule: ancienEleve.matricule,
+      classe: nouvelleClasse,
+      anneeScolaire: anneeCible,
+      eleveAnneePrecedente: ancienEleve._id,
+    });
+
+    res.status(201).json({
+      message: `Élève transféré en ${nouvelleClasse} (${anneeCible}) avec succès.`,
+      data: nouvelleFiche,
+    });
+  } catch (err) {
+    console.error("Erreur transfert élève:", err);
+    if (err.code === 11000) {
+      return res.status(409).json({
+        message: "Un élève avec ce matricule existe déjà pour cette année scolaire.",
+      });
+    }
+    if (err.name === "ValidationError") {
+      return res.status(400).json({ message: err.message, errors: err.errors });
+    }
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+/* =========================
+   TRANSFERT EN MASSE D'UNE CLASSE ENTIÈRE VERS UNE NOUVELLE ANNÉE
+   Même logique que le transfert individuel, appliquée à tous les élèves
+   d'une classe/année source en une seule opération. Les élèves déjà
+   transférés vers l'année cible (transfert précédent, relance après une
+   erreur partielle...) sont automatiquement ignorés, pas dupliqués.
+========================= */
+router.post("/eleves/transferer-classe", protect, async (req, res) => {
+  try {
+    const { classeSource, anneeSource, classeCible, anneeCible } = req.body;
+
+    if (!classeSource || !anneeSource || !classeCible || !anneeCible) {
+      return res.status(400).json({
+        message: "classeSource, anneeSource, classeCible et anneeCible sont tous requis.",
+      });
+    }
+    if (anneeSource === anneeCible) {
+      return res.status(400).json({
+        message: "L'année cible doit être différente de l'année source.",
+      });
+    }
+
+    const eleves = await Eleve.find({ classe: classeSource, anneeScolaire: anneeSource });
+    if (!eleves.length) {
+      return res.status(404).json({
+        message: `Aucun élève trouvé en ${classeSource} pour l'année ${anneeSource}.`,
+      });
+    }
+
+    // Ne pas re-transférer ceux qui ont déjà une fiche pour l'année cible
+    // (ex: relance après une interruption, ou double-clic)
+    const idsSource = eleves.map((e) => e._id);
+    const dejaTransferes = await Eleve.find({
+      eleveAnneePrecedente: { $in: idsSource },
+      anneeScolaire: anneeCible,
+    }).select("eleveAnneePrecedente");
+    const dejaTransferesSet = new Set(dejaTransferes.map((d) => String(d.eleveAnneePrecedente)));
+
+    const aTransferer = eleves.filter((e) => !dejaTransferesSet.has(String(e._id)));
+
+    if (!aTransferer.length) {
+      return res.json({
+        message: `Les ${eleves.length} élève(s) de ${classeSource} (${anneeSource}) ont déjà tous une fiche pour ${anneeCible}.`,
+        transferes: 0,
+        ignores: eleves.length,
+        erreurs: [],
+      });
+    }
+
+    const docs = aTransferer.map((e) => ({
+      nom: e.nom,
+      prenom: e.prenom,
+      dateNaissance: e.dateNaissance,
+      lieuNaissance: e.lieuNaissance,
+      sexe: e.sexe,
+      contact: e.contact,
+      matricule: e.matricule,
+      classe: classeCible,
+      anneeScolaire: anneeCible,
+      eleveAnneePrecedente: e._id,
+    }));
+
+    let insertedCount = 0;
+    let erreurs = [];
+    try {
+      const inserted = await Eleve.insertMany(docs, { ordered: false });
+      insertedCount = inserted.length;
+    } catch (bulkErr) {
+      // Avec { ordered: false }, Mongo tente d'insérer tous les documents et
+      // remonte une erreur globale listant seulement ceux qui ont échoué
+      // (ex: conflit de matricule) — les autres sont bien insérés.
+      insertedCount = bulkErr.insertedDocs ? bulkErr.insertedDocs.length : 0;
+      const writeErrors = bulkErr.writeErrors || (bulkErr.result && bulkErr.result.result && bulkErr.result.result.writeErrors) || [];
+      erreurs = writeErrors.map((we) => {
+        const doc = docs[we.index];
+        return {
+          eleve: doc ? `${doc.nom} ${doc.prenom}` : "élève inconnu",
+          raison: we.code === 11000 || (we.err && we.err.code === 11000)
+            ? "Matricule déjà utilisé pour cette année scolaire"
+            : "Erreur de validation",
+        };
+      });
+      if (!writeErrors.length) {
+        // Erreur imprévue, pas une simple erreur d'écriture partielle
+        throw bulkErr;
+      }
+    }
+
+    res.status(201).json({
+      message: `${insertedCount} élève(s) transféré(s) de ${classeSource} (${anneeSource}) vers ${classeCible} (${anneeCible}).`,
+      transferes: insertedCount,
+      ignores: dejaTransferesSet.size,
+      erreurs,
+    });
+  } catch (err) {
+    console.error("Erreur transfert de classe:", err);
+    res.status(500).json({ message: "Erreur serveur lors du transfert en masse." });
+  }
+});
+
 
 module.exports = router;
